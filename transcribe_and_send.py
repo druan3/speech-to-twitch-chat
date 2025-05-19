@@ -9,6 +9,12 @@ from irc.client import Reactor, ServerConnectionError
 last_sent_time = 0
 last_sent_text = ""
 
+# load Twitch credentials from .env
+load_dotenv()
+TWITCH_NICK = os.getenv("TWITCH_NICK")
+TWITCH_TOKEN = os.getenv("TWITCH_TOKEN")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL")
+
 def calculate_cooldown(message: str) -> float:
     word_count = len(message.strip().split())
 
@@ -18,12 +24,6 @@ def calculate_cooldown(message: str) -> float:
         return 4 # medium comment
     else:
         return 6 # long message
-
-# load Twitch credentials from .env
-load_dotenv()
-TWITCH_NICK = os.getenv("TWITCH_NICK")
-TWITCH_TOKEN = os.getenv("TWITCH_TOKEN")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL")
 
 # new function to keep connection alive
 def connect_to_twitch():
