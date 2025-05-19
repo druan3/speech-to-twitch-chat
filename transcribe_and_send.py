@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import numpy as np
 import sounddevice as sd
 from dotenv import load_dotenv
@@ -8,12 +9,21 @@ from irc.client import Reactor, ServerConnectionError
 
 last_sent_time = 0
 last_sent_text = ""
+SUBTITLE_FILE = "obs_subtitles.txt"
 
 # load Twitch credentials from .env
 load_dotenv()
 TWITCH_NICK = os.getenv("TWITCH_NICK")
 TWITCH_TOKEN = os.getenv("TWITCH_TOKEN")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL")
+
+def clear_subtitles_after_delay(seconds=5):
+    def clear():
+        time.sleep(seconds)
+        with open(SUBTITLE_FILE, "w", encoding="utf-8") as f:
+            f.write("")
+
+    threading.Thread(target=clear, daemon=True).start()
 
 def calculate_cooldown(message: str) -> float:
     word_count = len(message.strip().split())
@@ -50,6 +60,7 @@ def connect_to_twitch():
 # function to send a message to Twitch chat
 def send_to_twitch(connection, message):
     global last_sent_time
+    global last_sent_text
 
     current_time = time.time()
     cooldown = calculate_cooldown(message)
@@ -66,6 +77,9 @@ def send_to_twitch(connection, message):
         connection.privmsg(TWITCH_CHANNEL, message)
         last_sent_time = current_time
         last_sent_text = message.strip().lower()
+        with open(SUBTITLE_FILE, "w", encoding="utf-8") as f:
+            f.write(message)
+        clear_subtitles_after_delay()
         print(f"Sent: {message}")
 
 # main loop to transcribe and send message

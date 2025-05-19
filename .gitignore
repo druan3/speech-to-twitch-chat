@@ -11,3 +11,6 @@ __pycache__/
 
 # Ignore environment config
 .env
+
+# Ignore subtitles output
+obs_subtitles.txt
