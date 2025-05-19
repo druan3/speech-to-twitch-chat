@@ -7,6 +7,7 @@ from faster_whisper import WhisperModel
 from irc.client import Reactor, ServerConnectionError
 
 last_sent_time = 0
+last_sent_text = ""
 
 def calculate_cooldown(message: str) -> float:
     word_count = len(message.strip().split())
@@ -53,6 +54,10 @@ def send_to_twitch(connection, message):
     current_time = time.time()
     cooldown = calculate_cooldown(message)
 
+    if message.strip().lower() == last_sent_text.strip().lower():
+        print(f"Duplicate message ignored: {message}")
+        return
+
     if current_time - last_sent_time < cooldown:
         print(f"Cooldown active. Skipped: {message}")
         return
@@ -60,6 +65,7 @@ def send_to_twitch(connection, message):
     if connection:
         connection.privmsg(TWITCH_CHANNEL, message)
         last_sent_time = current_time
+        last_sent_text = message.strip().lower()
         print(f"Sent: {message}")
 
 # main loop to transcribe and send message
