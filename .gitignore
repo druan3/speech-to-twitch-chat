@@ -1,5 +1,13 @@
+# Ignore virtual environment
 venv/
+
+# Ignore Python bytecode
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+
+# Ignore logs and other temp files
 *.log
+*.tmp
+
+# Ignore environment config
+.env
