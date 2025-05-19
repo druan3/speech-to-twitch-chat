@@ -1,8 +1,10 @@
-import speech_recognition as sr
-import irc.client
 import os
 import time
+import numpy as np
+import sounddevice as sd
 from dotenv import load_dotenv
+from faster_whisper import WhisperModel
+from irc.client import Reactor, ServerConnectionError
 
 # load Twitch credentials from .env
 load_dotenv()
@@ -10,53 +12,69 @@ TWITCH_NICK = os.getenv("TWITCH_NICK")
 TWITCH_TOKEN = os.getenv("TWITCH_TOKEN")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL")
 
-# function to send a message to Twitch chat
-def send_to_twitch(message):
-
-    # attempt to connect to twitch chat
-    print("Connecting to Twitch IRC...")
-
-    reactor = irc.client.Reactor()
+# new function to keep connection alive
+def connect_to_twitch():
+    reactor = Reactor()
     try:
         conn = reactor.server().connect("irc.chat.twitch.tv", 6667, TWITCH_NICK, password=TWITCH_TOKEN)
-    except irc.client.ServerConnectionError as e:
-        print(f"IRC connection error: {e}")
-        return
+    except ServerConnectionError as e:
+        print("IRC connection failed: {e}")
+        return None, None
     
     def on_connect(connection, event):
-        print("Connected! Joining channel and sending message...")
+        print("Connected to Twitch chat.")
         connection.join(TWITCH_CHANNEL)
-        connection.privmsg(TWITCH_CHANNEL, message)
-        print(f"Sent to chat: {message}")
-        time.sleep(1)
-        connection.quit()
 
     conn.add_global_handler("welcome", on_connect)
-    
+
+    # wait for connection
     for _ in range(10):
         reactor.process_once(timeout=1)
         time.sleep(0.1)
-    
-# initialize the recognizer
-recognizer = sr.Recognizer()
 
-# use the default microphone
-with sr.Microphone() as source:
-    print("Listening... Speak clearly. (Ctrl+C to stop)")
+    return reactor, conn
+
+# function to send a message to Twitch chat
+def send_to_twitch(connection, message):
+    if connection:
+        connection.privmsg(TWITCH_CHANNEL, message)
+        print(f"Sent: {message}")
+
+# main loop to transcribe and send message
+def main():
+    print("Loading Whisper model...")
+    model = WhisperModel("base", device="cpu")
+
+    samplerate = 16000
+    duration = 5 # seconds of recording
+
+    print(f"Connecting to Twitch...")
+    reactor, conn = connect_to_twitch()
+
+    if not conn:
+        print("Could not connect to Twitch. Exiting.")
+        return
+    
+    print("Listening for speech... (Ctrl+C to stop)")
 
     while True:
         try:
             print("\nListening...")
-            audio = recognizer.listen(source)
-            text = recognizer.recognize_google(audio)
+            audio = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
+            sd.wait()
 
-            print(f"You said: {text}")
-            send_to_twitch(text)
+            audio_data = np.squeeze(audio)
 
-        except sr.UnknownValueError:
-            print("Couldn't understand audio.")
-        except sr.RequestError as e:
-            print(f"Speech recognition error: {e}")
+            segments, _ = model.transcribe(audio_data, language="en", beam_size=1)
+            for segment in segments:
+                text = segment.text.strip()
+                if text:
+                    print(f"You said: {text}")
+                    send_to_twitch(conn, text)
+
         except KeyboardInterrupt:
             print("\nExiting...")
             break
+
+if __name__ == "__main__":
+    main()
